@@ -1,0 +1,154 @@
+heat_template_version: queens
+parameters:
+  key:
+    type: string
+    description: Name of Nova keypair to be used to access servers via SSH
+  db_count:
+    type: number
+    default: 1
+    description: Number of Database backends to create
+  api_count:
+    type: number
+    default: 1
+    description: Number of API servers to create initially
+  api_min_count:
+    type: number
+    default: 1
+    description: Min number of API servers to scale down to
+  api_max_count:
+    type: number
+    default: 2
+    description: Max number of API servers to scale up to
+  db_image:
+    type: string
+    description: name or ID of Glance image to create a database server from
+  db_flavor:
+    type: string
+    description: name or ID of Nova flavor to create database server with
+  db_size:
+    type: number
+    description: size of the volume to create for database, in GB
+    default: 1
+  api_image:
+    type: string
+    description: name or ID of Glance image to create an API server from
+  api_flavor:
+    type: string
+    description: name or ID of Nova flavor to create an API server with
+  external_network:
+    type: string
+    description: name or ID of external network where to allocate a floating IP
+
+resources:
+  network:
+    type: OS::Neutron::Net
+
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      cidr: 10.10.10.0/24
+
+  db_root_password:
+    type: OS::Heat::RandomString
+
+  db_password:
+    type: OS::Heat::RandomString
+
+  db_user:
+    type: OS::Heat::RandomString
+    properties:
+      length: 8
+
+  database:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: db_count }
+      resource_ref:
+        type: Mirantis::RefWebApp::Database
+        properties:
+          image: { get_param: db_image }
+          flavor: { get_param: db_flavor }
+          key: { get_param: key }
+          subnet: { get_resource: subnet }
+          db_root_password: { get_attr: [ db_root_password, value ] }
+          db_password: { get_attr: [ db_password, value ] }
+          db_user: { get_attr: [ db_user, value ]}
+          vol_size: { get_param: db_size }
+
+  api:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      min_size: { get_param: api_min_count }
+      desired_capacity: { get_param: api_count }
+      max_size: { get_param: api_max_count }
+      resource_def:
+        type: Mirantis::RefWebApp::RestApi
+        properties:
+          image: { get_param: api_image }
+          flavor: { get_param: api_flavor }
+          key: { get_param: key }
+          subnet: { get_resource: subnet }
+          metadata: {"metering.server_group": {get_param: "OS::stack_id"}}
+          db_password: { get_attr: [ db_password, value ] }
+          db_user: { get_attr: [ db_user, value ]}
+          pool_id: {get_resource: pool}
+          db_hosts: { get_attr: [db, ip ]}
+
+  api_scaleup_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: api}
+      cooldown: 60
+      scaling_adjustment: 1
+
+  api_scaledown_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: api}
+      cooldown: 60
+      scaling_adjustment: -1
+
+  lb:
+    type: OS::Octavia::LoadBalancer
+    properties:
+      vip_subnet: { get_resource: subnet }
+
+  listener:
+    type: OS::Octavia::Listener
+    properties:
+      loadbalancer: {get_resource: lb}
+      protocol: HTTP
+      protocol_port: 80
+
+  pool:
+    type: OS::Octavia::Pool
+    properties:
+      listener: {get_resource: listener}
+      lb_algorithm: ROUND_ROBIN
+      protocol: HTTP
+      session_persistence:
+        type: SOURCE_IP
+
+  lb_monitor:
+    type: OS::Octavia::HealthMonitor
+    properties:
+      pool: { get_resource: pool }
+      type: TCP
+      delay: 5
+      max_retries: 5
+      timeout: 5
+  # assign a floating ip address to the load balancer
+  # pool.
+  lb_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_attr: [lb, vip_port_id]}
+
+outputs:
+  app_ip:
+    description: load-balanced IP of the webapp
+    value: { get_attr: [lb, vip ]}
