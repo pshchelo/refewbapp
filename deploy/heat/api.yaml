@@ -33,11 +33,14 @@ resources:
       config:
         str_replace:
           template: |
-            #!/bin/sh -x
-            echo running cloud-init script
-            echo db root password is $db_hosts
-            echo db user is $db_user
-            echo db user pasword is $db_password
+            #!/bin/sh -ex
+            git clone https://github.com/pshchelo/refwebapp /opt/refwebapp
+            cd /opt/refwebapp
+            ./deploy/deps.sh
+            make bootstrap
+            make install
+            # call wait condition here <-
+            make serve
           params:
             $db_hosts: { get_param: db_hosts }
             $db_password: { get_param: db_password }

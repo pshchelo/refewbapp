@@ -1,12 +1,13 @@
-.PHONY: bootstrap install test serve
+.PHONY: bootstrap install test serve all
 
 bootstrap:
-	curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3
+	curl https://bootstrap.pypa.io/get-pip.py | python3
+	pip3 install poetry
 
 install-dev:
 	poetry install 
 
-install-prod:
+install:
 	poetry install --no-dev
 
 serve:
