@@ -38,16 +38,28 @@ parameters:
   external_network:
     type: string
     description: name or ID of external network where to allocate a floating IP
+    default: public
 
 resources:
   network:
     type: OS::Neutron::Net
-
+    properties:
+      port_security_enabled: false
   subnet:
     type: OS::Neutron::Subnet
     properties:
       network: { get_resource: network }
       cidr: 10.10.10.0/24
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: external_network }
+  router_iface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: { get_resource: router }
+      subnet: { get_resource: subnet }
 
   db_root_password:
     type: OS::Heat::RandomString
@@ -60,21 +72,21 @@ resources:
     properties:
       length: 8
 
-  database:
-    type: OS::Heat::ResourceGroup
-    properties:
-      count: { get_param: db_count }
-      resource_ref:
-        type: Mirantis::RefWebApp::Database
-        properties:
-          image: { get_param: db_image }
-          flavor: { get_param: db_flavor }
-          key: { get_param: key }
-          subnet: { get_resource: subnet }
-          db_root_password: { get_attr: [ db_root_password, value ] }
-          db_password: { get_attr: [ db_password, value ] }
-          db_user: { get_attr: [ db_user, value ]}
-          vol_size: { get_param: db_size }
+  #database:
+  #  type: OS::Heat::ResourceGroup
+  #  properties:
+  #    count: { get_param: db_count }
+  #    resource_def:
+  #      type: Mirantis::RefWebApp::Database
+  #      properties:
+  #        image: { get_param: db_image }
+  #        flavor: { get_param: db_flavor }
+  #        key: { get_param: key }
+  #        subnet: { get_resource: subnet }
+  #        db_root_password: { get_attr: [ db_root_password, value ] }
+  #        db_password: { get_attr: [ db_password, value ] }
+  #        db_user: { get_attr: [ db_user, value ]}
+  #        vol_size: { get_param: db_size }
 
   api:
     type: OS::Heat::AutoScalingGroup
@@ -82,7 +94,7 @@ resources:
       min_size: { get_param: api_min_count }
       desired_capacity: { get_param: api_count }
       max_size: { get_param: api_max_count }
-      resource_def:
+      resource:
         type: Mirantis::RefWebApp::RestApi
         properties:
           image: { get_param: api_image }
@@ -92,8 +104,10 @@ resources:
           metadata: {"metering.server_group": {get_param: "OS::stack_id"}}
           db_password: { get_attr: [ db_password, value ] }
           db_user: { get_attr: [ db_user, value ]}
-          pool_id: {get_resource: pool}
-          db_hosts: { get_attr: [db, ip ]}
+          #pool_id: {get_resource: pool}
+          #db_hosts: { get_attr: [database, ip ]}
+          db_hosts:
+            foo: bar
 
   api_scaleup_policy:
     type: OS::Heat::ScalingPolicy
@@ -111,44 +125,44 @@ resources:
       cooldown: 60
       scaling_adjustment: -1
 
-  lb:
-    type: OS::Octavia::LoadBalancer
-    properties:
-      vip_subnet: { get_resource: subnet }
+  #lb:
+  #  type: OS::Octavia::LoadBalancer
+  #  properties:
+  #    vip_subnet: { get_resource: subnet }
 
-  listener:
-    type: OS::Octavia::Listener
-    properties:
-      loadbalancer: {get_resource: lb}
-      protocol: HTTP
-      protocol_port: 80
+  #listener:
+  #  type: OS::Octavia::Listener
+  #  properties:
+  #    loadbalancer: {get_resource: lb}
+  #    protocol: HTTP
+  #    protocol_port: 80
 
-  pool:
-    type: OS::Octavia::Pool
-    properties:
-      listener: {get_resource: listener}
-      lb_algorithm: ROUND_ROBIN
-      protocol: HTTP
-      session_persistence:
-        type: SOURCE_IP
+  #pool:
+  #  type: OS::Octavia::Pool
+  #  properties:
+  #    listener: {get_resource: listener}
+  #    lb_algorithm: ROUND_ROBIN
+  #    protocol: HTTP
+  #    session_persistence:
+  #      type: SOURCE_IP
 
-  lb_monitor:
-    type: OS::Octavia::HealthMonitor
-    properties:
-      pool: { get_resource: pool }
-      type: TCP
-      delay: 5
-      max_retries: 5
-      timeout: 5
-  # assign a floating ip address to the load balancer
-  # pool.
-  lb_floating:
-    type: OS::Neutron::FloatingIP
-    properties:
-      floating_network: {get_param: external_network}
-      port_id: {get_attr: [lb, vip_port_id]}
+  #lb_monitor:
+  #  type: OS::Octavia::HealthMonitor
+  #  properties:
+  #    pool: { get_resource: pool }
+  #    type: TCP
+  #    delay: 5
+  #    max_retries: 5
+  #    timeout: 5
+  ## assign a floating ip address to the load balancer
+  ## pool.
+  #lb_floating:
+  #  type: OS::Neutron::FloatingIP
+  #  properties:
+  #    floating_network: {get_param: external_network}
+  #    port_id: {get_attr: [lb, vip_port_id]}
 
-outputs:
-  app_ip:
-    description: load-balanced IP of the webapp
-    value: { get_attr: [lb, vip ]}
+#outputs:
+#  app_ip:
+#    description: load-balanced IP of the webapp
+#    value: { get_attr: [lb_floating, floating_ip_address]}

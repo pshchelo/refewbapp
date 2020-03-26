@@ -10,12 +10,15 @@ parameters:
   flavor:
     type: string
     description: flavor used by the servers
-  pool_id:
+  #pool_id:
+  #  type: string
+  #  description: Pool to contact
+  db_password:
     type: string
-    description: Pool to contact
-  user_data:
+  db_user:
     type: string
-    description: Server user_data
+  db_hosts:
+    type: json
   metadata:
     type: json
   subnet:
@@ -23,30 +26,46 @@ parameters:
     description: Subnet used by the server
 
 resources:
+  config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: |
+            #!/bin/sh -x
+            echo running cloud-init script
+            echo db root password is $db_hosts
+            echo db user is $db_user
+            echo db user pasword is $db_password
+          params:
+            $db_hosts: { get_param: db_hosts }
+            $db_password: { get_param: db_password }
+            $db_user: { get_param: db_user }
   server:
     type: OS::Nova::Server
     properties:
       flavor: {get_param: flavor}
       image: {get_param: image}
-      key_name: {get_param: key_name}
+      key_name: {get_param: key}
       metadata: {get_param: metadata}
-      user_data: {get_param: user_data}
+      user_data: {get_resource: config}
       user_data_format: RAW
       networks:
       - subnet: { get_param: subnet }
-  member:
-    type: OS::Octavia::PoolMember
-    properties:
-      pool: {get_param: pool_id}
-      address: {get_attr: [server, first_address]}
-      protocol_port: 80
-      subnet: {get_param: subnet}
+  #member:
+  #  type: OS::Octavia::PoolMember
+  #  properties:
+  #    pool: {get_param: pool_id}
+  #    address: {get_attr: [server, first_address]}
+  #    protocol_port: 80
+  #    subnet: {get_param: subnet}
 
 outputs:
   server_ip:
     description: IP Address of the load-balanced server.
     value: { get_attr: [server, first_address] }
-  lb_member:
-    description: LB member details.
-    value: { get_attr: [member, show] }
+  #lb_member:
+  #  description: LB member details.
+  #  value: { get_attr: [member, show] }
 

@@ -14,6 +14,8 @@ parameters:
     type: string
   db_root_password:
     type: string
+  vol_size:
+    type: number
 
 resources:
   volume:
@@ -26,16 +28,17 @@ resources:
     properties:
       group: ungrouped
       config:
-        template: |
-          #!/bin/sh
-          echo running cloud-init script
-          echo db root password is $db_root_password
-          echo db user is $db_user
-          echo db user pasword is $db_password
-        params:
-          $db_root_password: { get_param: db_root_password }
-          $db_password: { get_param: db_password }
-          $db_user: { get_param: db_user }
+        str_replace:
+          template: |
+            #!/bin/sh
+            echo running cloud-init script
+            echo db root password is $db_root_password
+            echo db user is $db_user
+            echo db user pasword is $db_password
+          params:
+            $db_root_password: { get_param: db_root_password }
+            $db_password: { get_param: db_password }
+            $db_user: { get_param: db_user }
   server:
     type: OS::Nova::Server
     properties:
