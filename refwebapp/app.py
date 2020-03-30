@@ -4,16 +4,17 @@ from sqlalchemy import create_engine
 import falcon
 import falcon_sqla
 
+from . import conf
 from . import models
 from . import records
 from . import root
 
-db_engine = create_engine("sqlite://")
+db_engine = create_engine(conf.DB_URL)
 models.init(db_engine)
 sa_manager = falcon_sqla.Manager(db_engine)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if conf.DEBUG else logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s:%(lineno)d -> %(message)s",
 )
 
