@@ -9,7 +9,7 @@ Base = declarative_base()
 
 
 class Record(Base):
-    __tablename__ = 'records'
+    __tablename__ = "records"
     id = Column(Integer, primary_key=True, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     data = Column(String(255), nullable=True)
@@ -25,7 +25,7 @@ class Record(Base):
             id=self.id,
             created_at=self.created_at.isoformat(timespec="milliseconds"),
             host=self.host,
-            data=self.data
+            data=self.data,
         )
 
 
