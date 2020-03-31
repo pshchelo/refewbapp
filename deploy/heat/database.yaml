@@ -8,11 +8,7 @@ parameters:
     type: string
   subnet:
     type: string
-  db_user:
-    type: string
   db_password:
-    type: string
-  db_root_password:
     type: string
   vol_size:
     type: number
@@ -30,15 +26,12 @@ resources:
       config:
         str_replace:
           template: |
-            #!/bin/sh
-            echo running cloud-init script
-            echo db root password is $db_root_password
-            echo db user is $db_user
-            echo db user pasword is $db_password
+            #!/bin/sh -x
+            apt-get install -y postgresql
+            sudo -u postgres createdb --locale=en_US.utf8 --encoding=UTF8 --template=template0 refwebapp
+            sudo -u postgres psql -c "CREATE ROLE refwebapp WITH LOGIN PASSWORD '$db_password'; GRANT ALL ON DATABASE refwebapp TO refwebapp;"
           params:
-            $db_root_password: { get_param: db_root_password }
             $db_password: { get_param: db_password }
-            $db_user: { get_param: db_user }
   server:
     type: OS::Nova::Server
     properties:
@@ -52,3 +45,12 @@ resources:
 outputs:
   ip:
     value: { get_attr: [server, first_address ]}
+  sqla_url:
+    value:
+      list_join:
+      - ""
+      - - "postgresql+pg8000://refwebapp:"
+        - { get_param: db_password}
+        - "@"
+        - { get_attr: [ server, first_address ] }
+        - ":5432/refwebapp"

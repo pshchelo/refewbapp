@@ -10,22 +10,33 @@ parameters:
   flavor:
     type: string
     description: flavor used by the servers
-  #pool_id:
-  #  type: string
-  #  description: Pool to contact
-  db_password:
+  sqla_url:
     type: string
-  db_user:
-    type: string
-  db_hosts:
-    type: json
   metadata:
     type: json
+  net:
+    type: string
   subnet:
     type: string
     description: Subnet used by the server
+  external_network:
+    type: string
+    description: public ip network
+    default: public
 
 resources:
+  port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: net }
+      port_security_enabled: false
+      fixed_ips:
+        - subnet: { get_param: subnet }
+  fip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+      port_id: { get_resource: port }
   config:
     type: OS::Heat::SoftwareConfig
     properties:
@@ -37,14 +48,12 @@ resources:
             git clone https://github.com/pshchelo/refwebapp /opt/refwebapp
             cd /opt/refwebapp
             ./deploy/deps.sh
-            make bootstrap
-            make install
-            # call wait condition here <-
-            make serve
+            curl https://bootstrap.pypa.io/get-pip.py | python3
+            pip3 install .[pgsql]
+            export REFWEBAPP_DB_URL="$SQLA_DB_URL"
+            gunicorn -c deploy/wsgi/guconfig.py "refwebapp.app:create_app()"
           params:
-            $db_hosts: { get_param: db_hosts }
-            $db_password: { get_param: db_password }
-            $db_user: { get_param: db_user }
+            $SQLA_DB_URL: { get_param: sqla_url }
   server:
     type: OS::Nova::Server
     properties:
@@ -55,20 +64,9 @@ resources:
       user_data: {get_resource: config}
       user_data_format: RAW
       networks:
-      - subnet: { get_param: subnet }
-  #member:
-  #  type: OS::Octavia::PoolMember
-  #  properties:
-  #    pool: {get_param: pool_id}
-  #    address: {get_attr: [server, first_address]}
-  #    protocol_port: 80
-  #    subnet: {get_param: subnet}
+        - port: { get_resource: port }
 
 outputs:
-  server_ip:
-    description: IP Address of the load-balanced server.
-    value: { get_attr: [server, first_address] }
-  #lb_member:
-  #  description: LB member details.
-  #  value: { get_attr: [member, show] }
-
+  floating_ip_address:
+    description: Public IP address allocated
+    value: { get_attr: [fip, floating_ip_address] }
