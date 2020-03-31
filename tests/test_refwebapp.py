@@ -1,5 +1,5 @@
-from refwebapp import __version__
+from refwebapp import version
 
 
 def test_version():
-    assert __version__ == '0.0.1'
+    assert version.version_info.package == "refwebapp"
