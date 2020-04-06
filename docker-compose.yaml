@@ -1,0 +1,22 @@
+version: '3'
+services:
+  database:
+    container_name: testgres
+    image: postgres # use latest official postgres version
+    environment:
+     POSTGRES_USER: refapp
+     POSTGRES_PASSWORD: supersecret
+     POSTGRES_DB: refapp
+    volumes:
+      - refapp-pgsql:/var/lib/postgresql/data/ # persist data even if container shuts down
+  refwebapp:
+    container_name: refwebapp-api
+    build: .
+    environment:
+      REFWEBAPP_DB_URL: postgresql+pg8000://refapp:supersecret@database:5432/refapp
+    ports:
+      - "8000:8000"
+    depends_on:
+      - database
+volumes:
+  refapp-pgsql: # named volumes can be managed easier using docker-compose

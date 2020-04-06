@@ -2,4 +2,3 @@ pbr>=5.0.0
 falcon
 falcon-sqla
 sqlalchemy
-gunicorn
